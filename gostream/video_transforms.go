@@ -16,14 +16,14 @@ type resizeVideoSource struct {
 }
 
 // NewResizeVideoSource returns a source that resizes images to the set dimensions.
-func NewResizeVideoSource(src VideoSource, width, height int) VideoSource {
+func NewResizeVideoSource(ctx context.Context, src VideoSource, width, height int) VideoSource {
 	rvs := &resizeVideoSource{
 		src:    src,
 		stream: NewEmbeddedVideoStream(src),
 		width:  width,
 		height: height,
 	}
-	return NewVideoSource(rvs, prop.Video{
+	return NewVideoSource(ctx, rvs, prop.Video{
 		Width:  rvs.width,
 		Height: rvs.height,
 	})

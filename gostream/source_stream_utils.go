@@ -2,6 +2,7 @@ package gostream
 
 import (
 	"context"
+	"fmt"
 
 	"go.viam.com/utils"
 
@@ -51,6 +52,7 @@ func streamMediaSource[T, U any](
 		readyCh, readyCtx := stream.StreamingReady()
 		select {
 		case <-ctx.Done():
+			logger.Info("streamMediaSource: context done")
 			return ctx.Err()
 		case <-readyCh:
 		}
@@ -68,12 +70,15 @@ func streamMediaSource[T, U any](
 		if err != nil {
 			return err
 		}
+		logger.Info("streamMediaSource: calling ms.Stream")
 		mediaStream, err := ms.Stream(ctx, errHandler)
 		if err != nil {
 			return err
 		}
 		defer func() {
+			logger.Info("streamMediaSource: closing mediaStream")
 			utils.UncheckedError(mediaStream.Close(ctx))
+			logger.Info("streamMediaSource: mediaStream closed")
 		}()
 		for {
 			select {
@@ -83,7 +88,9 @@ func streamMediaSource[T, U any](
 				return nil
 			default:
 			}
+			fmt.Println("streamMediaSource: calling mediaStream.Next")
 			media, release, err := mediaStream.Next(ctx)
+			fmt.Println("streamMediaSource: mediaStream.Next returned")
 			if err != nil {
 				continue
 			}
@@ -98,6 +105,7 @@ func streamMediaSource[T, U any](
 	}
 	for {
 		if err := streamLoop(); err != nil {
+			logger.Info("streamMediaSource: streamLoop returned error")
 			return err
 		}
 	}

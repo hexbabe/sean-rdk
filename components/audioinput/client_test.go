@@ -43,7 +43,7 @@ func TestClient(t *testing.T) {
 
 	// good audio input
 	injectAudioInput.StreamFunc = func(ctx context.Context, errHandlers ...gostream.ErrorHandler) (gostream.AudioStream, error) {
-		return gostream.NewEmbeddedAudioStreamFromReader(gostream.AudioReaderFunc(func(ctx context.Context) (wave.Audio, func(), error) {
+		return gostream.NewEmbeddedAudioStreamFromReader(ctx, gostream.AudioReaderFunc(func(ctx context.Context) (wave.Audio, func(), error) {
 			return audioData, func() {}, nil
 		})), nil
 	}
@@ -154,7 +154,7 @@ func TestClientStreamAfterClose(t *testing.T) {
 
 	// good audio input
 	injectAudioInput.StreamFunc = func(ctx context.Context, errHandlers ...gostream.ErrorHandler) (gostream.AudioStream, error) {
-		return gostream.NewEmbeddedAudioStreamFromReader(gostream.AudioReaderFunc(func(ctx context.Context) (wave.Audio, func(), error) {
+		return gostream.NewEmbeddedAudioStreamFromReader(ctx, gostream.AudioReaderFunc(func(ctx context.Context) (wave.Audio, func(), error) {
 			return audioData, func() {}, nil
 		})), nil
 	}

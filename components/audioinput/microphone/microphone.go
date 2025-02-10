@@ -26,7 +26,7 @@ func init() {
 		model,
 		resource.Registration[audioinput.AudioInput, *Config]{
 			Constructor: func(
-				_ context.Context,
+				ctx context.Context,
 				_ resource.Dependencies,
 				conf resource.Config,
 				logger logging.Logger,
@@ -35,7 +35,7 @@ func init() {
 				if err != nil {
 					return nil, err
 				}
-				src, err := newMicrophoneSource(newConf, logger)
+				src, err := newMicrophoneSource(ctx, newConf, logger)
 				if err != nil {
 					return nil, err
 				}
@@ -55,7 +55,7 @@ type Config struct {
 }
 
 // newMicrophoneSource returns a new source based on a microphone discovered from the given attributes.
-func newMicrophoneSource(conf *Config, logger logging.Logger) (audioinput.AudioSource, error) {
+func newMicrophoneSource(ctx context.Context, conf *Config, logger logging.Logger) (audioinput.AudioSource, error) {
 	var err error
 
 	debug := conf.Debug
@@ -70,7 +70,7 @@ func newMicrophoneSource(conf *Config, logger logging.Logger) (audioinput.AudioS
 	}
 
 	if conf.Path != "" {
-		return tryMicrophoneOpen(conf.Path, audioStreamConstraints, logger)
+		return tryMicrophoneOpen(ctx, conf.Path, audioStreamConstraints, logger)
 	}
 
 	var pattern *regexp.Regexp
@@ -100,7 +100,7 @@ func newMicrophoneSource(conf *Config, logger logging.Logger) (audioinput.AudioS
 					}
 					continue
 				}
-				s, err := tryMicrophoneOpen(label, audioStreamConstraints, logger)
+				s, err := tryMicrophoneOpen(ctx, label, audioStreamConstraints, logger)
 				if err == nil {
 					if debug {
 						logger.Debug("\t USING")
@@ -118,11 +118,12 @@ func newMicrophoneSource(conf *Config, logger logging.Logger) (audioinput.AudioS
 }
 
 func tryMicrophoneOpen(
+	ctx context.Context,
 	path string,
 	constraints mediadevices.MediaStreamConstraints,
 	logger logging.Logger,
 ) (audioinput.AudioSource, error) {
-	source, err := gostream.GetNamedAudioSource(filepath.Base(path), constraints, logger)
+	source, err := gostream.GetNamedAudioSource(ctx, filepath.Base(path), constraints, logger)
 	if err != nil {
 		return nil, err
 	}

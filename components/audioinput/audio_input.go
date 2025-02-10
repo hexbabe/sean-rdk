@@ -81,11 +81,11 @@ func (apf audioPropertiesFunc) MediaProperties(ctx context.Context) (prop.Audio,
 }
 
 // NewAudioSourceFromReader creates an AudioSource from a reader.
-func NewAudioSourceFromReader(reader gostream.AudioReader, props prop.Audio) (AudioSource, error) {
+func NewAudioSourceFromReader(ctx context.Context, reader gostream.AudioReader, props prop.Audio) (AudioSource, error) {
 	if reader == nil {
 		return nil, errors.New("cannot have a nil reader")
 	}
-	as := gostream.NewAudioSource(reader, props)
+	as := gostream.NewAudioSource(ctx, reader, props)
 	return &audioSource{
 		as: as,
 		prov: audioPropertiesFunc(func(ctx context.Context) (prop.Audio, error) {

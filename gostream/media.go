@@ -2,9 +2,11 @@ package gostream
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/pion/mediadevices/pkg/driver"
 	"github.com/pion/mediadevices/pkg/driver/camera"
@@ -172,7 +174,7 @@ func DriverFromMediaSource[T, U any](src MediaSource[T]) (driver.Driver, error) 
 }
 
 // newMediaSource instantiates a new media read closer and possibly references the given driver.
-func newMediaSource[T, U any](d driver.Driver, r MediaReader[T], p U) MediaSource[T] {
+func newMediaSource[T, U any](ctx context.Context, d driver.Driver, r MediaReader[T], p U) MediaSource[T] {
 	if d != nil {
 		driverRefs.mu.Lock()
 		defer driverRefs.mu.Unlock()
@@ -186,7 +188,7 @@ func newMediaSource[T, U any](d driver.Driver, r MediaReader[T], p U) MediaSourc
 		}
 	}
 
-	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancelCtx, cancel := context.WithCancel(ctx)
 	ms := &mediaSource[T, U]{
 		driver:            d,
 		reader:            r,
@@ -266,10 +268,13 @@ func (pc *producerConsumer[T, U]) start() {
 			}
 
 			pc.cancelCtxMu.RLock()
+			fmt.Println("producerConsumer: checking cancelCtx.Err()")
 			if err := pc.cancelCtx.Err(); err != nil {
+				fmt.Println("producerConsumer: cancelCtx.Err() != nil")
 				pc.cancelCtxMu.RUnlock()
 				break
 			}
+			fmt.Println("producerConsumer: cancelCtx.Err() == nil")
 			pc.cancelCtxMu.RUnlock()
 
 			func() {
@@ -286,24 +291,57 @@ func (pc *producerConsumer[T, U]) start() {
 
 				var prevRelease func()
 				if !first {
-					// okay to not hold a lock because we are the only both reader AND writer;
-					// other goroutines are just readers.
 					prevRelease = pc.current.Release
 				} else {
 					first = false
 				}
 
-				startLocalCtx, span := trace.StartSpan(startLocalCtx, "gostream::producerConsumer::readWrapper::Read")
-				media, release, err := pc.readWrapper.Read(startLocalCtx)
-				span.End()
+				// Create a channel to handle read timeout/cancellation
+				done := make(chan struct{})
+				var media T
+				var release func()
+				var err error
+
+				go func() {
+					defer close(done)
+					// Add timeout to the read operation
+					readCtx, cancel := context.WithTimeout(startLocalCtx, 5*time.Second)
+					defer cancel()
+					
+					_, span := trace.StartSpan(readCtx, "gostream::producerConsumer::readWrapper::Read")
+					fmt.Println("producerConsumer: calling readWrapper.Read")
+					
+					readDone := make(chan struct{})
+					var readErr error
+					go func() {
+						defer close(readDone)
+						media, release, readErr = pc.readWrapper.Read(readCtx)
+					}()
+
+					select {
+					case <-readDone:
+						fmt.Println("producerConsumer: readWrapper.Read completed")
+						err = readErr
+					case <-readCtx.Done():
+						fmt.Println("producerConsumer: readWrapper.Read timed out")
+						err = readCtx.Err()
+					}
+					
+					span.End()
+				}()
+
+				// Wait for either read completion or cancellation
+				select {
+				case <-done:
+					// Read completed
+				case <-pc.cancelCtx.Done():
+					fmt.Println("producerConsumer: read cancelled")
+					return
+				}
 
 				ref := utils.NewRefCountedValue(struct{}{})
 				ref.Ref()
 
-				// hold write lock long enough to set current but not for lastRelease
-				// since the reader (who will call ref) will hold a similar read lock
-				// to ref before unlocking. This ordering makes sure that we only ever
-				// call a deref of the previous media once a new one can be fetched.
 				pc.currentMu.Lock()
 				pc.current = &mediaRefReleasePairWithError[T]{media, ref, func() {
 					if ref.Deref() {
@@ -313,16 +351,44 @@ func (pc *producerConsumer[T, U]) start() {
 					}
 				}, err}
 				pc.currentMu.Unlock()
+
 				if prevRelease != nil {
 					prevRelease()
 				}
 			}()
 		}
 		// After loop breaks, we likely still have an unreleased current media.
+		fmt.Println("producerConsumer: loop broken, releasing current media")
 		if pc.current != nil && pc.current.Release != nil {
 			pc.current.Release()
 		}
-	}, func() { defer pc.activeBackgroundWorkers.Done(); pc.cancel() })
+	}, func() {
+		defer pc.activeBackgroundWorkers.Done()
+		defer fmt.Println("producerConsumer: activeBackgroundWorker Done() call finished")
+		pc.cancel()
+		fmt.Println("producerConsumer: cancel done")
+	})
+
+	go func() {
+		lockAcquired := make(chan struct{})
+		go func() {
+			pc.currentMu.Lock()
+			close(lockAcquired)
+		}()
+
+		select {
+		case <-lockAcquired:
+			// Lock acquired successfully
+			defer pc.currentMu.Unlock()
+			// ... rest of lock-protected code ...
+		case <-time.After(100 * time.Millisecond):
+			fmt.Println("producerConsumer: lock acquisition timed out")
+			return
+		case <-pc.cancelCtx.Done():
+			fmt.Println("producerConsumer: cancelled while waiting for lock")
+			return
+		}
+	}()
 }
 
 type mediaRefReleasePairWithError[T any] struct {
@@ -341,6 +407,7 @@ func (pc *producerConsumer[T, U]) Stop() {
 
 // assumes stateMu lock is held.
 func (pc *producerConsumer[T, U]) stop() {
+	fmt.Println("producerConsumer: begin stop")
 	var span *trace.Span
 	func() {
 		pc.cancelCtxMu.RLock()
@@ -358,8 +425,9 @@ func (pc *producerConsumer[T, U]) stop() {
 	pc.consumerCond.L.Lock()
 	pc.consumerCond.Broadcast()
 	pc.consumerCond.L.Unlock()
+	fmt.Println("producerConsumer: consumerCond broadcast; waiting for activeBackgroundWorkers")
 	pc.activeBackgroundWorkers.Wait()
-
+	fmt.Println("producerConsumer: activeBackgroundWorkers wait done")
 	pc.currentMu.Lock()
 	defer pc.currentMu.Unlock()
 	pc.current = nil
@@ -373,6 +441,7 @@ func (pc *producerConsumer[T, U]) stop() {
 }
 
 func (pc *producerConsumer[T, U]) stopOne() {
+	fmt.Println("producerConsumer: begin stopOne")
 	var span *trace.Span
 	func() {
 		pc.cancelCtxMu.RLock()
@@ -382,13 +451,21 @@ func (pc *producerConsumer[T, U]) stopOne() {
 
 	defer span.End()
 
+	fmt.Println("producerConsumer: acquiring stateMu lock")
 	pc.stateMu.Lock()
+	fmt.Println("producerConsumer: stateMu locked")
 	defer pc.stateMu.Unlock()
+	fmt.Println("producerConsumer: releasing stateMu lock")
 	pc.listenersMu.Lock()
+	fmt.Println("producerConsumer: listenersMu locked")
 	defer pc.listenersMu.Unlock()
+	fmt.Println("producerConsumer: releasing listenersMu lock")
 	pc.listeners--
+	fmt.Println("producerConsumer: listeners--")
 	if pc.listeners == 0 {
+		fmt.Println("producerConsumer: calling stop")
 		pc.stop()
+		fmt.Println("producerConsumer: stop done")
 	}
 }
 
@@ -456,84 +533,84 @@ type mediaStream[T any, U any] struct {
 }
 
 func (ms *mediaStream[T, U]) Next(ctx context.Context) (T, func(), error) {
+	fmt.Println("mediaStream: begin Next")
 	ctx, nextSpan := trace.StartSpan(ctx, "gostream::mediaStream::Next")
 	defer nextSpan.End()
 
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
-	// lock keeps us sequential and prevents misuse
 
 	var zero T
 	if err := ms.cancelCtx.Err(); err != nil {
 		return zero, nil, err
 	}
 
+	// Signal producer that we're interested
 	ms.prodCon.consumerCond.L.Lock()
-	// Even though interestedConsumers is atomic, this is a critical section!
-	// That's because if the producer sees zero interested consumers, it's going
-	// to Wait but we only want it to do that once we are ready to signal it.
-	// It's also a RLock because we have many consumers (readers) and one producer (writer).
 	atomic.AddInt64(&ms.prodCon.interestedConsumers, 1)
 	ms.prodCon.producerCond.Signal()
 
-	select {
-	case <-ms.cancelCtx.Done():
-		ms.prodCon.consumerCond.L.Unlock()
-		return zero, nil, ms.cancelCtx.Err()
-	case <-ctx.Done():
-		ms.prodCon.consumerCond.L.Unlock()
-		return zero, nil, ctx.Err()
-	default:
-	}
+	// Create done channel for wait operation
+	done := make(chan struct{})
+	var media T
+	var release func()
+	var err error
 
-	waitForNext := func() error {
-		_, span := trace.StartSpan(ctx, "gostream::mediaStream::Next::waitForNext")
-		defer span.End()
+	go func() {
+		defer close(done)
+		defer ms.prodCon.consumerCond.L.Unlock()
 
-		ms.prodCon.consumerCond.Wait()
-		ms.prodCon.consumerCond.L.Unlock()
+		// Wait for producer to signal data is ready
+		timeout := time.After(5 * time.Second)
+		waitDone := make(chan struct{})
+		go func() {
+			ms.prodCon.consumerCond.Wait()
+			close(waitDone)
+		}()
+
+		select {
+		case <-timeout:
+			err = errors.New("timeout waiting for data")
+			return
+		case <-waitDone:
+		}
+
+		// Check if we were cancelled while waiting
 		if err := ms.cancelCtx.Err(); err != nil {
-			return err
+			err = ms.cancelCtx.Err()
+			return
 		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		return nil
-	}
 
-	if err := waitForNext(); err != nil {
-		return zero, nil, err
-	}
-
-	isAvailable := func() bool {
+		// Get the current data
 		ms.prodCon.currentMu.RLock()
-		available := ms.prodCon.current != nil
-		ms.prodCon.currentMu.RUnlock()
-		return available
-	}
-	for !isAvailable() {
-		ms.prodCon.consumerCond.L.Lock()
-		if err := waitForNext(); err != nil {
-			return zero, nil, err
+		defer ms.prodCon.currentMu.RUnlock()
+
+		if ms.prodCon.current == nil {
+			err = errors.New("no data available")
+			return
 		}
-	}
 
-	ctx, prodConLockSpan := trace.StartSpan(ctx, "gostream::mediaStream::Next (waiting for ms.prodCon lock)")
-	defer prodConLockSpan.End()
+		if ms.prodCon.current.Err != nil {
+			err = ms.prodCon.current.Err
+			return
+		}
 
-	// hold a read lock long enough before current.Ref can be dereffed
-	// due to a new current being set.
-	ms.prodCon.currentMu.RLock()
-	defer ms.prodCon.currentMu.RUnlock()
-	current := ms.prodCon.current
-	if current.Err != nil {
-		return zero, nil, current.Err
+		media = ms.prodCon.current.Media
+		ms.prodCon.current.Ref.Ref()
+		release = ms.prodCon.current.Release
+	}()
+
+	// Wait for either completion or cancellation
+	select {
+	case <-done:
+		return media, release, err
+	case <-ctx.Done():
+		return zero, nil, ctx.Err()
 	}
-	current.Ref.Ref()
-	return current.Media, current.Release, nil
 }
 
 func (ms *mediaStream[T, U]) Close(ctx context.Context) error {
+	fmt.Println("mediaStream: begin Close")
 	if parentSpan := trace.FromContext(ctx); parentSpan != nil {
 		func() {
 			ms.prodCon.cancelCtxMu.Lock()
@@ -555,7 +632,9 @@ func (ms *mediaStream[T, U]) Close(ctx context.Context) error {
 	ms.prodCon.errHandlersMu.Lock()
 	delete(ms.prodCon.errHandlers, ms)
 	ms.prodCon.errHandlersMu.Unlock()
+	fmt.Println("mediaStream: calling stopOne")
 	ms.prodCon.stopOne()
+	fmt.Println("mediaStream: stopOne done")
 	return nil
 }
 
@@ -640,6 +719,7 @@ func (ms *mediaSource[T, U]) Stream(ctx context.Context, errHandlers ...ErrorHan
 }
 
 func (ms *mediaSource[T, U]) Close(ctx context.Context) error {
+	fmt.Println("mediaSource: begin Close")
 	func() {
 		ms.producerConsumersMu.Lock()
 		defer ms.producerConsumersMu.Unlock()

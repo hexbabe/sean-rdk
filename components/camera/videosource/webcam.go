@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"image"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -328,49 +329,77 @@ func (c *webcam) Monitor() {
 
 	goutils.ManagedGo(func() {
 		for {
+			select {
+			case <-c.cancelCtx.Done():
+				fmt.Println("webcam monitor: context cancelled")
+				return
+			default:
+				// Try to acquire lock with timeout
+				lockAcquired := make(chan struct{})
+				go func() {
+					c.mu.RLock()
+					close(lockAcquired)
+				}()
+
+				select {
+				case <-lockAcquired:
+					func() {
+						defer c.mu.RUnlock()
+						
+						logger := c.logger
+						ok, err := c.isCameraConnected()
+						if err != nil {
+							logger.Debugw("cannot determine camera status", "error", err)
+							return
+						}
+
+						if !ok {
+							c.mu.RUnlock()
+							c.mu.Lock()
+							c.disconnected = true
+							c.mu.Unlock()
+							c.mu.RLock()
+
+							logger.Error("camera no longer connected; reconnecting")
+							for {
+								if !goutils.SelectContextOrWait(c.cancelCtx, wait) {
+									return
+								}
+								cont := func() bool {
+									c.mu.Lock()
+									defer c.mu.Unlock()
+
+									if err := c.reconnectCamera(&c.conf); err != nil {
+										c.logger.Debugw("failed to reconnect camera", "error", err)
+										return true
+									}
+									c.logger.Infow("camera reconnected")
+									return false
+								}()
+								if cont {
+									continue
+								}
+								break
+							}
+						}
+					}()
+				case <-time.After(100 * time.Millisecond):
+					fmt.Println("webcam monitor: lock acquisition timed out")
+				case <-c.cancelCtx.Done():
+					fmt.Println("webcam monitor: cancelled while waiting for lock")
+					return
+				}
+			}
+
+			// Wait before next check
 			if !goutils.SelectContextOrWait(c.cancelCtx, wait) {
 				return
 			}
-
-			c.mu.RLock()
-			logger := c.logger
-			c.mu.RUnlock()
-
-			ok, err := c.isCameraConnected()
-			if err != nil {
-				logger.Debugw("cannot determine camera status", "error", err)
-				continue
-			}
-
-			if !ok {
-				c.mu.Lock()
-				c.disconnected = true
-				c.mu.Unlock()
-
-				logger.Error("camera no longer connected; reconnecting")
-				for {
-					if !goutils.SelectContextOrWait(c.cancelCtx, wait) {
-						return
-					}
-					cont := func() bool {
-						c.mu.Lock()
-						defer c.mu.Unlock()
-
-						if err := c.reconnectCamera(&c.conf); err != nil {
-							c.logger.Debugw("failed to reconnect camera", "error", err)
-							return true
-						}
-						c.logger.Infow("camera reconnected")
-						return false
-					}()
-					if cont {
-						continue
-					}
-					break
-				}
-			}
 		}
-	}, c.activeBackgroundWorkers.Done)
+	}, func() {
+		defer c.activeBackgroundWorkers.Done()
+		fmt.Println("webcam monitor: cleanup callback called")
+	})
 }
 
 func (c *webcam) Images(ctx context.Context) ([]camera.NamedImage, resource.ResponseMetadata, error) {
@@ -382,7 +411,7 @@ func (c *webcam) Images(ctx context.Context) ([]camera.NamedImage, resource.Resp
 
 	img, release, err := c.reader.Read()
 	if err != nil {
-		return nil, resource.ResponseMetadata{}, errors.Wrap(err, "monitoredWebcam: call to get Images failed")
+		return nil, resource.ResponseMetadata{}, errors.Wrap(err, "webcam: call to get Images failed")
 	}
 	defer func() {
 		if release != nil {
@@ -413,11 +442,30 @@ func (c *webcam) Image(ctx context.Context, mimeType string, extra map[string]in
 	if c.reader == nil {
 		return nil, camera.ImageMetadata{}, errors.New("underlying reader is nil")
 	}
-	img, release, err := c.reader.Read()
-	if err != nil {
-		return nil, camera.ImageMetadata{}, err
+
+	// Create channels for read operation
+	done := make(chan struct{})
+	var img image.Image
+	var release func()
+	var readErr error
+
+	go func() {
+		defer close(done)
+		img, release, readErr = c.reader.Read()
+	}()
+
+	// Wait for either completion or timeout
+	select {
+	case <-done:
+		if readErr != nil {
+			return nil, camera.ImageMetadata{}, readErr
+		}
+		defer release()
+	case <-ctx.Done():
+		return nil, camera.ImageMetadata{}, ctx.Err()
+	case <-time.After(5 * time.Second):
+		return nil, camera.ImageMetadata{}, errors.New("image read timed out")
 	}
-	defer release()
 
 	if mimeType == "" {
 		mimeType = utils.MimeTypeJPEG

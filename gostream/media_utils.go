@@ -54,8 +54,8 @@ func (ems *embeddedMediaStream[T, U]) Close(ctx context.Context) error {
 // NewEmbeddedMediaStreamFromReader returns a media stream from a media reader that is
 // intended to be embedded/composed by another source. It defers the creation
 // of its media stream.
-func NewEmbeddedMediaStreamFromReader[T, U any](reader MediaReader[T], p U) MediaStream[T] {
-	src := newMediaSource[T](nil, MediaReaderFunc[T](reader.Read), p)
+func NewEmbeddedMediaStreamFromReader[T, U any](ctx context.Context, reader MediaReader[T], p U) MediaStream[T] {
+	src := newMediaSource[T](ctx, nil, MediaReaderFunc[T](reader.Read), p)
 	stream := NewEmbeddedMediaStream[T, U](src)
 	return &embeddedMediaReaderStream[T, U]{
 		src:    src,

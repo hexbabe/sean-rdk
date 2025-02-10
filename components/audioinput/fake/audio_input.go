@@ -52,7 +52,7 @@ func init() {
 					cond.Broadcast()
 				}
 			}, input.activeBackgroundWorkers.Done)
-			as := gostream.NewAudioSource(gostream.AudioReaderFunc(input.Read), prop.Audio{
+			as := gostream.NewAudioSource(cancelCtx, gostream.AudioReaderFunc(input.Read), prop.Audio{
 				ChannelCount:  channelCount,
 				SampleRate:    samplingRate,
 				IsBigEndian:   audioinput.HostEndian == binary.BigEndian,

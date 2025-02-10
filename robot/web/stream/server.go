@@ -88,7 +88,7 @@ func NewServer(
 		videoSources:      map[string]gostream.HotSwappableVideoSource{},
 		audioSources:      map[string]gostream.HotSwappableAudioSource{},
 	}
-	server.startMonitorCameraAvailable()
+	// server.startMonitorCameraAvailable()
 	return server
 }
 
@@ -447,7 +447,7 @@ func (server *Server) resizeVideoSource(ctx context.Context, name string, width,
 	if !ok {
 		return fmt.Errorf("stream state not found with name %q", name)
 	}
-	resizer := gostream.NewResizeVideoSource(camerautils.VideoSourceFromCamera(ctx, cam), width, height)
+	resizer := gostream.NewResizeVideoSource(ctx, camerautils.VideoSourceFromCamera(ctx, cam), width, height)
 	server.logger.Debugf(
 		"resizing video source to width %d and height %d",
 		width, height,
@@ -548,7 +548,9 @@ func (server *Server) AddNewStreams(ctx context.Context) error {
 
 // Close closes the Server and waits for spun off goroutines to complete.
 func (server *Server) Close() error {
+	server.logger.Info("begin Server.Close() and call server.closedFn()")
 	server.closedFn()
+	server.logger.Info("end call Server.closedFn()")
 	server.mu.Lock()
 	server.isAlive = false
 
@@ -560,7 +562,9 @@ func (server *Server) Close() error {
 		server.logger.Errorf("Stream Server Close > StreamState.Close() errs: %s", errs)
 	}
 	server.mu.Unlock()
+	server.logger.Info("waiting for activeBackgroundWorkers to finish")
 	server.activeBackgroundWorkers.Wait()
+	server.logger.Info("activeBackgroundWorkers finished")
 	return errs
 }
 
@@ -676,7 +680,7 @@ func (server *Server) refreshVideoSources(ctx context.Context) {
 							"resizing video source to width %d and height %d",
 							width, height,
 						)
-						resizer := gostream.NewResizeVideoSource(src, width, height)
+						resizer := gostream.NewResizeVideoSource(ctx, src, width, height)
 						existing.Swap(resizer)
 						continue
 					}
@@ -729,18 +733,30 @@ func (server *Server) createStream(config gostream.StreamConfig, name string) (g
 }
 
 func (server *Server) startStream(streamFunc func(opts *BackoffTuningOptions) error) {
+	server.logger.Info("startStream: starting stream")
 	waitCh := make(chan struct{})
 	server.activeBackgroundWorkers.Add(1)
 	utils.PanicCapturingGo(func() {
-		defer server.activeBackgroundWorkers.Done()
+		defer func() {
+			server.logger.Info("startStream: stream worker starting cleanup")
+			server.activeBackgroundWorkers.Done()
+			server.logger.Info("startStream: stream worker finished cleanup")
+		}()
 		close(waitCh)
+		server.logger.Info("startStream: waitCh closed, starting streamFunc")
+
+		server.logger.Info("startStream: calling streamFunc")
 		if err := streamFunc(&BackoffTuningOptions{}); err != nil {
+			server.logger.Info("startStream: streamFunc returned with error")
 			if utils.FilterOutError(err, context.Canceled) != nil {
 				server.logger.Errorw("error streaming", "error", err)
 			}
+		} else {
+			server.logger.Info("startStream: streamFunc completed successfully")
 		}
 	})
 	<-waitCh
+	server.logger.Info("startStream: waitCh received, goroutine started")
 }
 
 func (server *Server) startVideoStream(ctx context.Context, source gostream.VideoSource, stream gostream.Stream) {

@@ -38,8 +38,8 @@ func VideoSourceFromCamera(ctx context.Context, cam camera.Camera) gostream.Vide
 
 	img, err := camera.DecodeImageFromCamera(ctx, "", nil, cam)
 	if err == nil {
-		return gostream.NewVideoSource(reader, prop.Video{Width: img.Bounds().Dx(), Height: img.Bounds().Dy()})
+		return gostream.NewVideoSource(ctx, reader, prop.Video{Width: img.Bounds().Dx(), Height: img.Bounds().Dy()})
 	}
 	// Okay to return empty prop because processInputFrames will tick and set them
-	return gostream.NewVideoSource(reader, prop.Video{})
+	return gostream.NewVideoSource(ctx, reader, prop.Video{})
 }

@@ -57,7 +57,8 @@ func incrementAverage(avgOld, valNew, sizeNew float64) float64 {
 
 func BenchmarkStream_30FPS(b *testing.B) {
 	r := newReader(30)
-	s := NewEmbeddedVideoStreamFromReader(r)
+	ctx := context.Background()
+	s := NewEmbeddedVideoStreamFromReader(ctx, r)
 
 	var avgNs float64
 	var count int64
@@ -81,7 +82,8 @@ func BenchmarkStream_30FPS(b *testing.B) {
 
 func BenchmarkStream_60FPS(b *testing.B) {
 	r := newReader(60)
-	s := NewEmbeddedVideoStreamFromReader(r)
+	ctx := context.Background()
+	s := NewEmbeddedVideoStreamFromReader(ctx, r)
 
 	var avgNs float64
 	var count int64
@@ -105,10 +107,10 @@ func BenchmarkStream_60FPS(b *testing.B) {
 
 func BenchmarkStream_30FPS_2Streams(b *testing.B) {
 	r := newReader(30)
-	s := NewEmbeddedVideoStreamFromReader(r)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
+	s := NewEmbeddedVideoStreamFromReader(ctx, r)
 
-	go stream(ctx, b, NewEmbeddedVideoStreamFromReader(r))
+	go stream(ctx, b, NewEmbeddedVideoStreamFromReader(ctx, r))
 
 	var avgNs float64
 	var count int64
@@ -127,17 +129,16 @@ func BenchmarkStream_30FPS_2Streams(b *testing.B) {
 		avgNs = incrementAverage(avgNs, float64(elapsedNs), float64(count))
 	}
 
-	cancel()
 	b.ReportMetric(SecondNs/avgNs, "fps")
 }
 
 func BenchmarkStream_30FPS_3Streams(b *testing.B) {
 	r := newReader(30)
-	s := NewEmbeddedVideoStreamFromReader(r)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := context.Background()
+	s := NewEmbeddedVideoStreamFromReader(ctx, r)
 
-	go stream(ctx, b, NewEmbeddedVideoStreamFromReader(r))
-	go stream(ctx, b, NewEmbeddedVideoStreamFromReader(r))
+	go stream(ctx, b, NewEmbeddedVideoStreamFromReader(ctx, r))
+	go stream(ctx, b, NewEmbeddedVideoStreamFromReader(ctx, r))
 
 	var avgNs float64
 	var count int64
@@ -156,6 +157,5 @@ func BenchmarkStream_30FPS_3Streams(b *testing.B) {
 		avgNs = incrementAverage(avgNs, float64(elapsedNs), float64(count))
 	}
 
-	cancel()
 	b.ReportMetric(SecondNs/avgNs, "fps")
 }

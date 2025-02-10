@@ -5,6 +5,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/pkg/errors"
@@ -49,9 +50,11 @@ func (svc *webService) Reconfigure(ctx context.Context, deps resource.Dependenci
 }
 
 func (svc *webService) closeStreamServer() {
+	fmt.Println("begin closeStreamServer()")
 	if err := svc.streamServer.Close(); err != nil {
 		svc.logger.Errorw("error closing stream server", "error", err)
 	}
+	fmt.Println("end closeStreamServer()")
 }
 
 func (svc *webService) initStreamServer(ctx context.Context) error {

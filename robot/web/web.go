@@ -360,6 +360,7 @@ func (svc *webService) Close(ctx context.Context) error {
 // runWeb takes the given robot and options and runs the web server. This function will
 // block until the context is done.
 func (svc *webService) runWeb(ctx context.Context, options weboptions.Options) (err error) {
+	fmt.Println("begin runWeb()")
 	if options.Network.BindAddress != "" && options.Network.Listener != nil {
 		return errors.New("may only set one of network bind address or listener")
 	}
@@ -445,23 +446,34 @@ func (svc *webService) runWeb(ctx context.Context, options weboptions.Options) (
 
 	svc.webWorkers.Add(1)
 	utils.PanicCapturingGo(func() {
+		fmt.Println("begin webWorkers.Add (1)")
 		defer svc.webWorkers.Done()
+		fmt.Println("begin <-ctx.Done() (1)")
 		<-ctx.Done()
+		fmt.Println("end <-ctx.Done() (1)")
 		defer func() {
+			fmt.Println("begin httpServer.Shutdown(context.Background()) (1)")
 			if err := httpServer.Shutdown(context.Background()); err != nil {
 				svc.logger.Errorw("error shutting down", "error", err)
 			}
+			fmt.Println("end httpServer.Shutdown(context.Background()) (1)")
 		}()
 		defer func() {
+			fmt.Println("begin rpcServer.Stop() (1)")
 			if err := svc.rpcServer.Stop(); err != nil {
 				svc.logger.Errorw("error stopping rpc server", "error", err)
 			}
+			fmt.Println("end rpcServer.Stop() (1)")
 		}()
+		fmt.Println("call closeStreamServer() (1)")
 		svc.closeStreamServer()
+		fmt.Println("end call closeStreamServer() (1)\n end webWorkers.Add (1)")
 	})
 	svc.webWorkers.Add(1)
 	utils.PanicCapturingGo(func() {
+		defer fmt.Println("end webWorkers.Add (2)")
 		defer svc.webWorkers.Done()
+		fmt.Println("begin webWorkers.Add (2)")
 		if err := svc.rpcServer.Start(); err != nil {
 			svc.logger.Errorw("error starting rpc server", "error", err)
 		}
@@ -488,6 +500,8 @@ func (svc *webService) runWeb(ctx context.Context, options weboptions.Options) (
 
 	svc.webWorkers.Add(1)
 	utils.PanicCapturingGo(func() {
+		fmt.Println("begin webWorkers.Add (3)")
+		defer fmt.Println("end webWorkers.Add (3)")
 		defer svc.webWorkers.Done()
 		var serveErr error
 		if options.Secure {
@@ -500,6 +514,7 @@ func (svc *webService) runWeb(ctx context.Context, options weboptions.Options) (
 		}
 	})
 
+	fmt.Println("end runWeb()")
 	return err
 }
 

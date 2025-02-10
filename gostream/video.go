@@ -28,13 +28,13 @@ type (
 )
 
 // NewVideoSource instantiates a new video source.
-func NewVideoSource(r VideoReader, p prop.Video) VideoSource {
-	return newMediaSource(nil, r, p)
+func NewVideoSource(ctx context.Context, r VideoReader, p prop.Video) VideoSource {
+	return newMediaSource(ctx, nil, r, p)
 }
 
 // NewVideoSourceForDriver instantiates a new video source and references the given driver.
-func NewVideoSourceForDriver(d driver.Driver, r VideoReader, p prop.Video) VideoSource {
-	return newMediaSource(d, r, p)
+func NewVideoSourceForDriver(ctx context.Context, d driver.Driver, r VideoReader, p prop.Video) VideoSource {
+	return newMediaSource(ctx, d, r, p)
 }
 
 // ReadImage gets a single image from a video source. Using this has less of a guarantee
@@ -53,6 +53,6 @@ func NewEmbeddedVideoStream(src VideoSource) VideoStream {
 // NewEmbeddedVideoStreamFromReader returns a video stream from a video reader that is
 // intended to be embedded/composed by another source. It defers the creation
 // of its stream.
-func NewEmbeddedVideoStreamFromReader(reader VideoReader) VideoStream {
-	return NewEmbeddedMediaStreamFromReader(reader, prop.Video{})
+func NewEmbeddedVideoStreamFromReader(ctx context.Context, reader VideoReader) VideoStream {
+	return NewEmbeddedMediaStreamFromReader(ctx, reader, prop.Video{})
 }

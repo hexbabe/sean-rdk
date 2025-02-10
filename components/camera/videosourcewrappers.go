@@ -131,7 +131,7 @@ func NewVideoSourceFromReader(
 	if isRTPPassthrough {
 		rtpPassthroughSource = passthrough
 	}
-	vs := gostream.NewVideoSource(reader, prop.Video{})
+	vs := gostream.NewVideoSource(ctx, reader, prop.Video{})
 	actualSystem := syst
 	if actualSystem == nil {
 		srcCam, ok := reader.(Camera)

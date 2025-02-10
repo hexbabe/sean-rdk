@@ -28,14 +28,14 @@ type (
 )
 
 // NewAudioSource instantiates a new audio read closer.
-func NewAudioSource(r AudioReader, p prop.Audio) AudioSource {
-	return newMediaSource(nil, r, p)
+func NewAudioSource(ctx context.Context, r AudioReader, p prop.Audio) AudioSource {
+	return newMediaSource(ctx, nil, r, p)
 }
 
 // NewAudioSourceForDriver instantiates a new audio read closer and references the given
 // driver.
-func NewAudioSourceForDriver(d driver.Driver, r AudioReader, p prop.Audio) AudioSource {
-	return newMediaSource(d, r, p)
+func NewAudioSourceForDriver(ctx context.Context, d driver.Driver, r AudioReader, p prop.Audio) AudioSource {
+	return newMediaSource(ctx, d, r, p)
 }
 
 // ReadAudio gets a single audio wave from an audio source. Using this has less of a guarantee
@@ -54,6 +54,6 @@ func NewEmbeddedAudioStream(src AudioSource) AudioStream {
 // NewEmbeddedAudioStreamFromReader returns an audio stream from an audio reader that is
 // intended to be embedded/composed by another source. It defers the creation
 // of its stream.
-func NewEmbeddedAudioStreamFromReader(reader AudioReader) AudioStream {
-	return NewEmbeddedMediaStreamFromReader(reader, prop.Audio{})
+func NewEmbeddedAudioStreamFromReader(ctx context.Context, reader AudioReader) AudioStream {
+	return NewEmbeddedMediaStreamFromReader(ctx, reader, prop.Audio{})
 }

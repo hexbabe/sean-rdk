@@ -92,7 +92,8 @@ func TestReadMedia(t *testing.T) {
 	}
 
 	imgSource := &imageSource{WrappedImages: colors}
-	videoSrc := NewVideoSource(imgSource, prop.Video{})
+	ctx := context.Background()
+	videoSrc := NewVideoSource(ctx, imgSource, prop.Video{})
 	// Test all images are returned in order.
 	for i, expected := range colors {
 		actual, release, err := ReadMedia(context.Background(), videoSrc)
@@ -118,7 +119,8 @@ func TestReadMedia(t *testing.T) {
 // Test that image comparison should fail if two images are not the same.
 func TestImageComparison(t *testing.T) {
 	imgSource := &imageSource{WrappedImages: []*WrappedImage{createWrappedImage(t, rimage.Red)}}
-	videoSrc := NewVideoSource(imgSource, prop.Video{})
+	ctx := context.Background()
+	videoSrc := NewVideoSource(ctx, imgSource, prop.Video{})
 
 	pink := createWrappedImage(t, rimage.Pink)
 	red, release, err := ReadMedia(context.Background(), videoSrc)
@@ -143,8 +145,9 @@ func TestStreamMultipleConsumers(t *testing.T) {
 	}
 
 	imgSource := &imageSource{WrappedImages: colors}
-	videoSrc := NewVideoSource(imgSource, prop.Video{})
-	stream, err := videoSrc.Stream(context.Background())
+	ctx := context.Background()
+	videoSrc := NewVideoSource(ctx, imgSource, prop.Video{})
+	stream, err := videoSrc.Stream(ctx)
 	test.That(t, err, test.ShouldBeNil)
 
 	numConsumers := 3
@@ -196,7 +199,8 @@ func TestStreamWithoutNext(t *testing.T) {
 	colors := []*WrappedImage{createWrappedImage(t, rimage.Red)}
 
 	imgSource := &imageSource{WrappedImages: colors}
-	videoSrc := NewVideoSource(imgSource, prop.Video{})
+	ctx := context.Background()
+	videoSrc := NewVideoSource(ctx, imgSource, prop.Video{})
 
 	// Start stream
 	stream, err := videoSrc.Stream(context.Background())

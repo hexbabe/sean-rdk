@@ -1,6 +1,7 @@
 package gostream
 
 import (
+	"context"
 	"image"
 	"math"
 	"regexp"
@@ -47,6 +48,7 @@ var DefaultConstraints = mediadevices.MediaStreamConstraints{
 
 // GetNamedScreenSource attempts to find a screen device by the given name.
 func GetNamedScreenSource(
+	ctx context.Context,
 	name string,
 	constraints mediadevices.MediaStreamConstraints,
 	logger logging.Logger,
@@ -55,11 +57,12 @@ func GetNamedScreenSource(
 	if err != nil {
 		return nil, err
 	}
-	return newVideoSourceFromDriver(d, selectedMedia)
+	return newVideoSourceFromDriver(ctx, d, selectedMedia)
 }
 
 // GetPatternedScreenSource attempts to find a screen device by the given label pattern.
 func GetPatternedScreenSource(
+	ctx context.Context,
 	labelPattern *regexp.Regexp,
 	constraints mediadevices.MediaStreamConstraints,
 	logger logging.Logger,
@@ -68,11 +71,12 @@ func GetPatternedScreenSource(
 	if err != nil {
 		return nil, err
 	}
-	return newVideoSourceFromDriver(d, selectedMedia)
+	return newVideoSourceFromDriver(ctx, d, selectedMedia)
 }
 
 // GetNamedVideoSource attempts to find a video device (not a screen) by the given name.
 func GetNamedVideoSource(
+	ctx context.Context,
 	name string,
 	constraints mediadevices.MediaStreamConstraints,
 	logger logging.Logger,
@@ -81,11 +85,12 @@ func GetNamedVideoSource(
 	if err != nil {
 		return nil, err
 	}
-	return newVideoSourceFromDriver(d, selectedMedia)
+	return newVideoSourceFromDriver(ctx, d, selectedMedia)
 }
 
 // GetPatternedVideoSource attempts to find a video device (not a screen) by the given label pattern.
 func GetPatternedVideoSource(
+	ctx context.Context,
 	labelPattern *regexp.Regexp,
 	constraints mediadevices.MediaStreamConstraints,
 	logger logging.Logger,
@@ -94,11 +99,12 @@ func GetPatternedVideoSource(
 	if err != nil {
 		return nil, err
 	}
-	return newVideoSourceFromDriver(d, selectedMedia)
+	return newVideoSourceFromDriver(ctx, d, selectedMedia)
 }
 
 // GetAnyScreenSource attempts to find any suitable screen device.
 func GetAnyScreenSource(
+	ctx context.Context,
 	constraints mediadevices.MediaStreamConstraints,
 	logger logging.Logger,
 ) (MediaSource[image.Image], error) {
@@ -106,11 +112,12 @@ func GetAnyScreenSource(
 	if err != nil {
 		return nil, err
 	}
-	return newVideoSourceFromDriver(d, selectedMedia)
+	return newVideoSourceFromDriver(ctx, d, selectedMedia)
 }
 
 // GetAnyVideoSource attempts to find any suitable video device (not a screen).
 func GetAnyVideoSource(
+	ctx context.Context,
 	constraints mediadevices.MediaStreamConstraints,
 	logger logging.Logger,
 ) (MediaSource[image.Image], error) {
@@ -118,11 +125,12 @@ func GetAnyVideoSource(
 	if err != nil {
 		return nil, err
 	}
-	return newVideoSourceFromDriver(d, selectedMedia)
+	return newVideoSourceFromDriver(ctx, d, selectedMedia)
 }
 
 // GetAnyAudioSource attempts to find any suitable audio device.
 func GetAnyAudioSource(
+	ctx context.Context,
 	constraints mediadevices.MediaStreamConstraints,
 	logger logging.Logger,
 ) (MediaSource[wave.Audio], error) {
@@ -130,11 +138,12 @@ func GetAnyAudioSource(
 	if err != nil {
 		return nil, err
 	}
-	return newAudioSourceFromDriver(d, selectedMedia, logger)
+	return newAudioSourceFromDriver(ctx, d, selectedMedia, logger)
 }
 
 // GetNamedAudioSource attempts to find an audio device by the given name.
 func GetNamedAudioSource(
+	ctx context.Context,
 	name string,
 	constraints mediadevices.MediaStreamConstraints,
 	logger logging.Logger,
@@ -143,11 +152,12 @@ func GetNamedAudioSource(
 	if err != nil {
 		return nil, err
 	}
-	return newAudioSourceFromDriver(d, selectedMedia, logger)
+	return newAudioSourceFromDriver(ctx, d, selectedMedia, logger)
 }
 
 // GetPatternedAudioSource attempts to find an audio device by the given label pattern.
 func GetPatternedAudioSource(
+	ctx context.Context,
 	labelPattern *regexp.Regexp,
 	constraints mediadevices.MediaStreamConstraints,
 	logger logging.Logger,
@@ -156,7 +166,7 @@ func GetPatternedAudioSource(
 	if err != nil {
 		return nil, err
 	}
-	return newAudioSourceFromDriver(d, selectedMedia, logger)
+	return newAudioSourceFromDriver(ctx, d, selectedMedia, logger)
 }
 
 // DeviceInfo describes a driver.
@@ -282,6 +292,7 @@ func getUserVideoDriverPattern(
 }
 
 func newVideoSourceFromDriver(
+	ctx context.Context,
 	videoDriver driver.Driver,
 	mediaProp prop.Media,
 ) (MediaSource[image.Image], error) {
@@ -303,7 +314,7 @@ func newVideoSourceFromDriver(
 	if err != nil {
 		return nil, err
 	}
-	return newMediaSource[image.Image](videoDriver, mediaReaderFuncNoCtx[image.Image](reader.Read), mediaProp.Video), nil
+	return newMediaSource[image.Image](ctx, videoDriver, mediaReaderFuncNoCtx[image.Image](reader.Read), mediaProp.Video), nil
 }
 
 func getUserAudioDriver(
@@ -331,6 +342,7 @@ func getUserAudioDriverPattern(
 }
 
 func newAudioSourceFromDriver(
+	ctx context.Context,
 	audioDriver driver.Driver,
 	mediaProp prop.Media,
 	logger logging.Logger,
@@ -353,7 +365,7 @@ func newAudioSourceFromDriver(
 	if err != nil {
 		return nil, err
 	}
-	return newMediaSource[wave.Audio](audioDriver, mediaReaderFuncNoCtx[wave.Audio](reader.Read), mediaProp.Audio), nil
+	return newMediaSource[wave.Audio](ctx, audioDriver, mediaReaderFuncNoCtx[wave.Audio](reader.Read), mediaProp.Audio), nil
 }
 
 func labelFilter(target string, useSep bool) driver.FilterFn {
