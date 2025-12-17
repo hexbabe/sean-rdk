@@ -94,6 +94,7 @@ func GetStreamableNamedImageFromCamera(ctx context.Context, cam camera.Camera) (
 		if err != nil {
 			continue
 		}
+
 		if _, ok := StreamableImageMIMETypes[FormatStringToMimeType(format)]; ok {
 			return namedImage, nil
 		}
