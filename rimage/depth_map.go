@@ -117,13 +117,6 @@ func (dm *DepthMap) SubImage(rect image.Rectangle) *DepthMap {
 // or if it can be converted into one.
 func ConvertImageToDepthMap(ctx context.Context, img image.Image) (*DepthMap, error) {
 	switch ii := img.(type) {
-	case *LazyEncodedImage:
-		lazyImg, _ := img.(*LazyEncodedImage)
-		decodedImg, err := DecodeImage(ctx, lazyImg.RawData(), lazyImg.MIMEType())
-		if err != nil {
-			return nil, err
-		}
-		return ConvertImageToDepthMap(ctx, decodedImg)
 	case *DepthMap:
 		return ii, nil
 	case *imageWithDepth:

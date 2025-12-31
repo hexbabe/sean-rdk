@@ -676,29 +676,6 @@ func TestVideoSourceFromCamera_FilterMultipleImages_NoMatchingSource(t *testing.
 	test.That(t, diffVal, test.ShouldEqual, 0)
 }
 
-func TestVideoSourceFromCamera_LazyDecodeConfigError(t *testing.T) {
-	malformedImage := rimage.NewLazyEncodedImage(
-		[]byte("not a valid image"),
-		utils.MimeTypePNG,
-	)
-
-	namedImg, err := camera.NamedImageFromImage(malformedImage, "lazy-image", utils.MimeTypePNG, data.Annotations{})
-	test.That(t, err, test.ShouldBeNil)
-
-	cam := &inject.Camera{
-		ImagesFunc: func(
-			ctx context.Context,
-			sourceNames []string,
-			extra map[string]interface{},
-		) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-			return []camera.NamedImage{namedImg}, resource.ResponseMetadata{}, nil
-		},
-	}
-
-	_, err = camerautils.VideoSourceFromCamera(context.Background(), cam)
-	test.That(t, err, test.ShouldBeNil)
-}
-
 func TestVideoSourceFromCamera_InvalidImageFirst_ThenValidAlsoAvailable(t *testing.T) {
 	validImg := image.NewRGBA(image.Rect(0, 0, 4, 4))
 	invalidBytes := []byte("not a valid image")

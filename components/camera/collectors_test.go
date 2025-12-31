@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"image"
 	"io"
 	"strconv"
 	"testing"
@@ -25,7 +24,6 @@ import (
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/pointcloud"
 	"go.viam.com/rdk/resource"
-	"go.viam.com/rdk/rimage"
 	tu "go.viam.com/rdk/testutils"
 	"go.viam.com/rdk/testutils/inject"
 	"go.viam.com/rdk/utils"
@@ -83,18 +81,13 @@ func TestCollectors(t *testing.T) {
 	viamLogoJpeg, err := io.ReadAll(base64.NewDecoder(base64.StdEncoding, bytes.NewReader(viamLogoJpegB64)))
 	test.That(t, err, test.ShouldBeNil)
 
-	img := rimage.NewLazyEncodedImage(viamLogoJpeg, utils.MimeTypeJPEG)
-	// 32 x 32 image
-	test.That(t, img.Bounds().Dx(), test.ShouldEqual, 32)
-	test.That(t, img.Bounds().Dy(), test.ShouldEqual, 32)
-
 	pcd, err := pointcloud.NewFromFile(artifact.MustPath("pointcloud/test.las"), "")
 	test.That(t, err, test.ShouldBeNil)
 
 	var pcdBuf bytes.Buffer
 	test.That(t, pointcloud.ToPCD(pcd, &pcdBuf, pointcloud.PCDBinary), test.ShouldBeNil)
 
-	cam := newCamera(img, img, pcd)
+	cam := newCamera(viamLogoJpeg, pcd)
 
 	tests := []struct {
 		name      string
@@ -182,30 +175,15 @@ func TestDoCommandCollector(t *testing.T) {
 		CaptureInterval: captureInterval,
 		DoCommandMap:    doCommandMap,
 		Collector:       camera.NewDoCommandCollector,
-		ResourceFactory: func() interface{} { return newCamera(nil, nil, nil) },
+		ResourceFactory: func() interface{} { return newCamera(nil, nil) },
 	})
 }
 
 func newCamera(
-	left, right image.Image,
+	imgBytes []byte,
 	pcd pointcloud.PointCloud,
 ) camera.Camera {
 	v := &inject.Camera{}
-	v.ImagesFunc = func(
-		ctx context.Context,
-		filterSourceNames []string,
-		extra map[string]interface{},
-	) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-		viamLogoJpegBytes, err := io.ReadAll(base64.NewDecoder(base64.StdEncoding, bytes.NewReader(viamLogoJpegB64)))
-		if err != nil {
-			return nil, resource.ResponseMetadata{}, err
-		}
-		namedImg, err := camera.NamedImageFromBytes(viamLogoJpegBytes, "", utils.MimeTypeJPEG, data.Annotations{})
-		if err != nil {
-			return nil, resource.ResponseMetadata{}, err
-		}
-		return []camera.NamedImage{namedImg}, resource.ResponseMetadata{CapturedAt: time.Now()}, nil
-	}
 
 	v.NextPointCloudFunc = func(ctx context.Context, extra map[string]interface{}) (pointcloud.PointCloud, error) {
 		return pcd, nil
@@ -216,11 +194,11 @@ func newCamera(
 		filterSourceNames []string,
 		extra map[string]interface{},
 	) ([]camera.NamedImage, resource.ResponseMetadata, error) {
-		leftImg, err := camera.NamedImageFromImage(left, "left", utils.MimeTypeJPEG, annotations1)
+		leftImg, err := camera.NamedImageFromBytes(imgBytes, "left", utils.MimeTypeJPEG, annotations1)
 		if err != nil {
 			return nil, resource.ResponseMetadata{}, err
 		}
-		rightImg, err := camera.NamedImageFromImage(right, "right", utils.MimeTypeJPEG, annotations2)
+		rightImg, err := camera.NamedImageFromBytes(imgBytes, "right", utils.MimeTypeJPEG, annotations2)
 		if err != nil {
 			return nil, resource.ResponseMetadata{}, err
 		}

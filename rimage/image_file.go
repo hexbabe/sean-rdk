@@ -185,13 +185,6 @@ func WriteImageToFile(path string, img image.Image) (err error) {
 // ConvertImageSafe converts a go image into our Image type with error handling.
 // This is a safer alternative to ConvertImage as it returns errors instead of panicking.
 func ConvertImageSafe(img image.Image) (*Image, error) {
-	if lazyImg, ok := img.(*LazyEncodedImage); ok {
-		decodedImg, err := lazyImg.DecodedImage()
-		if err != nil {
-			return nil, err
-		}
-		img = decodedImg
-	}
 	ii, ok := img.(*Image)
 	if ok {
 		return ii, nil
@@ -259,13 +252,6 @@ func SaveImage(pic image.Image, loc string) error {
 			panic(err)
 		}
 	}()
-	if lazyImg, ok := pic.(*LazyEncodedImage); ok {
-		decodedPic, err := lazyImg.DecodedImage()
-		if err != nil {
-			return err
-		}
-		pic = decodedPic
-	}
 	if err = jpeg.Encode(f, pic, &jpeg.Options{Quality: 75}); err != nil {
 		return errors.Wrapf(err, "the 'image' will not encode")
 	}
@@ -277,10 +263,6 @@ func SaveImage(pic image.Image, loc string) error {
 func DecodeImage(ctx context.Context, imgBytes []byte, mimeType string) (image.Image, error) {
 	_, span := trace.StartSpan(ctx, "rimage::DecodeImage::"+mimeType)
 	defer span.End()
-	mimeType, returnLazy := ut.CheckLazyMIMEType(mimeType)
-	if returnLazy {
-		return NewLazyEncodedImage(imgBytes, mimeType), nil
-	}
 	switch mimeType {
 	case "":
 		img, err := jpeg.Decode(bytes.NewReader(imgBytes))
@@ -306,21 +288,8 @@ func EncodeImage(ctx context.Context, img image.Image, mimeType string) ([]byte,
 	_, span := trace.StartSpan(ctx, "rimage::EncodeImage::"+mimeType)
 	defer span.End()
 
-	actualOutMIME, _ := ut.CheckLazyMIMEType(mimeType)
-
-	if lazy, ok := img.(*LazyEncodedImage); ok {
-		if lazy.MIMEType() == actualOutMIME {
-			return lazy.imgBytes, nil
-		}
-		// LazyImage holds bytes different from requested mime type: decode and re-encode
-		err := lazy.DecodeImage()
-		if err != nil {
-			return nil, errors.Errorf("could not decode LazyEncodedImage: %v", err)
-		}
-		return EncodeImage(ctx, lazy.decodedImage, actualOutMIME)
-	}
 	var buf bytes.Buffer
-	switch actualOutMIME {
+	switch mimeType {
 	case ut.MimeTypeRawDepth:
 		if _, err := WriteViamDepthMapTo(img, &buf); err != nil {
 			return nil, err
@@ -356,7 +325,7 @@ func EncodeImage(ctx context.Context, img image.Image, mimeType string) ([]byte,
 		frame := img.(H264)
 		buf.Write(frame.Bytes)
 	default:
-		return nil, errors.Errorf("do not know how to encode %q", actualOutMIME)
+		return nil, errors.Errorf("do not know how to encode %q", mimeType)
 	}
 
 	return buf.Bytes(), nil

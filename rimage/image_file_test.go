@@ -40,13 +40,10 @@ func TestDecodeImage(t *testing.T) {
 	var buf bytes.Buffer
 	test.That(t, png.Encode(&buf, img), test.ShouldBeNil)
 
-	t.Run("lazy", func(t *testing.T) {
-		decoded, err := DecodeImage(context.Background(), buf.Bytes(), utils.WithLazyMIMEType(utils.MimeTypePNG))
+	t.Run("png", func(t *testing.T) {
+		decoded, err := DecodeImage(context.Background(), buf.Bytes(), utils.MimeTypePNG)
 		test.That(t, err, test.ShouldBeNil)
-		test.That(t, decoded, test.ShouldHaveSameTypeAs, &LazyEncodedImage{})
-		decodedLazy := decoded.(*LazyEncodedImage)
-		test.That(t, decodedLazy.RawData(), test.ShouldResemble, buf.Bytes())
-		test.That(t, decodedLazy.Bounds(), test.ShouldResemble, img.Bounds())
+		test.That(t, decoded.Bounds(), test.ShouldResemble, img.Bounds())
 	})
 }
 
@@ -54,27 +51,11 @@ func TestEncodeImage(t *testing.T) {
 	img := image.NewNRGBA(image.Rect(0, 0, 4, 8))
 	img.Set(3, 3, Red)
 
-	var buf bytes.Buffer
-	test.That(t, png.Encode(&buf, img), test.ShouldBeNil)
-
 	var bufJPEG bytes.Buffer
 	test.That(t, jpeg.Encode(&bufJPEG, img, &jpeg.Options{Quality: 75}), test.ShouldBeNil)
 
-	t.Run("lazy", func(t *testing.T) {
-		// fast
-		lazyImg := NewLazyEncodedImage(buf.Bytes(), "hehe")
-		encoded, err := EncodeImage(context.Background(), lazyImg, "hehe")
-		test.That(t, err, test.ShouldBeNil)
-		test.That(t, encoded, test.ShouldResemble, buf.Bytes())
-
-		lazyImg = NewLazyEncodedImage(buf.Bytes(), "hehe")
-		encoded, err = EncodeImage(context.Background(), lazyImg, utils.WithLazyMIMEType("hehe"))
-		test.That(t, err, test.ShouldBeNil)
-		test.That(t, encoded, test.ShouldResemble, buf.Bytes())
-	})
-	t.Run("jpeg from png", func(t *testing.T) {
-		lazyImg := NewLazyEncodedImage(buf.Bytes(), utils.MimeTypePNG)
-		encoded, err := EncodeImage(context.Background(), lazyImg, utils.MimeTypeJPEG)
+	t.Run("jpeg", func(t *testing.T) {
+		encoded, err := EncodeImage(context.Background(), img, utils.MimeTypeJPEG)
 		test.That(t, err, test.ShouldBeNil)
 		test.That(t, encoded, test.ShouldResemble, bufJPEG.Bytes())
 	})

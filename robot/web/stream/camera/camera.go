@@ -27,17 +27,11 @@ var StreamableImageMIMETypes = map[string]interface{}{
 
 // cropToEvenDimensions crops an image to even dimensions for x264 compatibility.
 // x264 only supports even resolutions. This ensures all streamed images work with x264.
-func cropToEvenDimensions(img image.Image) (image.Image, error) {
-	if img, ok := img.(*rimage.LazyEncodedImage); ok {
-		if err := img.DecodeConfig(); err != nil {
-			return nil, err
-		}
-	}
-
+func cropToEvenDimensions(img image.Image) image.Image {
 	hasOddWidth := img.Bounds().Dx()%2 != 0
 	hasOddHeight := img.Bounds().Dy()%2 != 0
 	if !hasOddWidth && !hasOddHeight {
-		return img, nil
+		return img
 	}
 
 	rImg := rimage.ConvertImage(img)
@@ -49,7 +43,7 @@ func cropToEvenDimensions(img image.Image) (image.Image, error) {
 	if hasOddHeight {
 		newHeight--
 	}
-	return rImg.SubImage(image.Rect(0, 0, newWidth, newHeight)), nil
+	return rImg.SubImage(image.Rect(0, 0, newWidth, newHeight))
 }
 
 // Camera returns the camera from the robot (derived from the stream) or
@@ -169,13 +163,7 @@ func VideoSourceFromCamera(ctx context.Context, cam camera.Camera) (gostream.Vid
 			return nil, func() {}, err
 		}
 
-		img, err = cropToEvenDimensions(img)
-		if err != nil {
-			sourceName = nil
-			return nil, func() {}, err
-		}
-
-		return img, func() {}, nil
+		return cropToEvenDimensions(img), func() {}, nil
 	})
 
 	// Return empty prop because there are no downstream consumers of the video props anyways.

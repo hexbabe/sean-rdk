@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	datapb "go.viam.com/api/app/data/v1"
 	datasyncpb "go.viam.com/api/app/datasync/v1"
 	"go.viam.com/test"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -32,7 +31,7 @@ import (
 )
 
 //nolint:lll
-var viamLogoJpegB64 = []byte("/9j/4QD4RXhpZgAATU0AKgAAAAgABwESAAMAAAABAAEAAAEaAAUAAAABAAAAYgEbAAUAAAABAAAAagEoAAMAAAABAAIAAAExAAIAAAAhAAAAcgITAAMAAAABAAEAAIdpAAQAAAABAAAAlAAAAAAAAABIAAAAAQAAAEgAAAABQWRvYmUgUGhvdG9zaG9wIDIzLjQgKE1hY2ludG9zaCkAAAAHkAAABwAAAAQwMjIxkQEABwAAAAQBAgMAoAAABwAAAAQwMTAwoAEAAwAAAAEAAQAAoAIABAAAAAEAAAAgoAMABAAAAAEAAAAgpAYAAwAAAAEAAAAAAAAAAAAA/9sAhAAcHBwcHBwwHBwwRDAwMERcRERERFx0XFxcXFx0jHR0dHR0dIyMjIyMjIyMqKioqKioxMTExMTc3Nzc3Nzc3Nzc3NzcASIkJDg0OGA0NGDmnICc5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ub/3QAEAAL/wAARCAAgACADASIAAhEBAxEB/8QBogAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoLEAACAQMDAgQDBQUEBAAAAX0BAgMABBEFEiExQQYTUWEHInEUMoGRoQgjQrHBFVLR8CQzYnKCCQoWFxgZGiUmJygpKjQ1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4eLj5OXm5+jp6vHy8/T19vf4+foBAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKCxEAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDm6K0dNu1tZsSgGNuDx0961NX09WT7ZbgcD5gPT1oA5qiul0fT1VPtlwByPlB7D1rL1K7W5mxEAI04GBjPvQB//9Dm66TRr/I+xTf8A/wrm6ASpBXgjpQB0ms34UfYof8AgWP5VzdBJY5PJNFAH//Z")
+var viamLogoJpegB64 = []byte("/9j/4QD4RXhpZgAATU0AKgAAAAgABwESAAMAAAABAAEAAAEaAAUAAAABAAAAYgEbAAUAAAABAAAAagEoAAMAAAABAAIAAAExAAIAAAAhAAAAcgITAAMAAAABAAEAAIdpAAQAAAABAAAAlAAAAAAAAABIAAAAAQAAAEgAAAABQWRvYmUgUGhvdG9zaG9wIDIzLjQgKE1hY2ludG9zaCkAAAAHkAAABwAAAAQwMjIxkQEABwAAAAQBAgMAoAAABwAAAAQwMTAwoAEAAwAAAAEAAQAAoAIABAAAAAEAAAAgoAMABAAAAAEAAAAgpAYAAwAAAAEAAAAAAAAAAAAA/9sAhAAcHBwcHBwwHBwwRDAwMERcRERERFx0XFxcXFx0jHR0dHR0dIyMjIyMjIyMqKioqKioxMTExMTc3Nzc3Nzc3NzcASIkJDg0OGA0NGDmnICc5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ub/3QAEAAL/wAARCAAgACADASIAAhEBAxEB/8QBogAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoLEAACAQMDAgQDBQUEBAAAAX0BAgMABBEFEiExQQYTUWEHInEUMoGRoQgjQrHBFVLR8CQzYnKCCQoWFxgZGiUmJygpKjQ1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4eLj5OXm5+jp6vHy8/T19vf4+foBAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKCxEAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDm6K0dNu1tZsSgGNuDx0961NX09WT7ZbgcD5gPT1oA5qiul0fT1VPtlwByPlB7D1rL1K7W5mxEAI04GBjPvQB//9Dm66TRr/I+xTf8A/wrm6ASpBXgjpQB0ms34UfYof8AgWP5VzdBJY5PJNFAH//Z")
 
 type fakeDetection struct {
 	boundingBox   *image.Rectangle
@@ -133,79 +132,76 @@ func TestCollectors(t *testing.T) {
 	test.That(t, err, test.ShouldBeNil)
 	viamLogoJpeg, err := io.ReadAll(base64.NewDecoder(base64.StdEncoding, bytes.NewReader(viamLogoJpegB64)))
 	test.That(t, err, test.ShouldBeNil)
-	img := rimage.NewLazyEncodedImage(viamLogoJpeg, utils.MimeTypeJPEG)
+	img, err := rimage.DecodeImage(context.Background(), viamLogoJpeg, utils.MimeTypeJPEG)
+	test.That(t, err, test.ShouldBeNil)
 	// 32 x 32 image
 	test.That(t, img.Bounds().Dx(), test.ShouldEqual, 32)
 	test.That(t, img.Bounds().Dy(), test.ShouldEqual, 32)
-	bboxConf := 0.45
-	classConf := 0.85
-	tests := []struct {
-		name      string
-		collector data.CollectorConstructor
-		expected  []*datasyncpb.SensorData
-		vision    visionservice.Service
-	}{
-		{
-			name:      "CaptureAllFromCameraCollector returns non-empty CaptureAllFromCameraResp",
-			collector: visionservice.NewCaptureAllFromCameraCollector,
-			expected: []*datasyncpb.SensorData{{
-				Metadata: &datasyncpb.SensorMetadata{
-					MimeType: datasyncpb.MimeType_MIME_TYPE_IMAGE_JPEG,
-					Annotations: &datapb.Annotations{
-						Bboxes: []*datapb.BoundingBox{
-							{
-								Label:          "cat",
-								XMinNormalized: 0.3125,
-								YMinNormalized: 0.625,
-								XMaxNormalized: 3.4375,
-								YMaxNormalized: 3.75,
-								Confidence:     &bboxConf,
-							},
-						},
-						Classifications: []*datapb.Classification{{
-							Label:      "cat",
-							Confidence: &classConf,
-						}},
-					},
-				},
-				Data: &datasyncpb.SensorData_Binary{Binary: viamLogoJpeg},
-			}},
-			vision: newVisionService(img),
-		},
-	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			start := time.Now()
-			buf := tu.NewMockBuffer(t)
-			params := data.CollectorParams{
-				DataType:      data.CaptureTypeBinary,
-				ComponentName: serviceName,
-				Interval:      captureInterval,
-				Logger:        logging.NewTestLogger(t),
-				Clock:         clock.New(),
-				Target:        buf,
-				MethodParams:  methodParams,
-			}
+	t.Run("CaptureAllFromCameraCollector returns non-empty CaptureAllFromCameraResp", func(t *testing.T) {
+		start := time.Now()
+		buf := tu.NewMockBuffer(t)
+		params := data.CollectorParams{
+			DataType:      data.CaptureTypeBinary,
+			ComponentName: serviceName,
+			Interval:      captureInterval,
+			Logger:        logging.NewTestLogger(t),
+			Clock:         clock.New(),
+			Target:        buf,
+			MethodParams:  methodParams,
+		}
 
-			col, err := tc.collector(tc.vision, params)
-			test.That(t, err, test.ShouldBeNil)
+		col, err := visionservice.NewCaptureAllFromCameraCollector(newVisionService(img), params)
+		test.That(t, err, test.ShouldBeNil)
 
-			defer col.Close()
-			col.Collect()
+		defer col.Close()
+		col.Collect()
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			tu.CheckMockBufferWrites(t, ctx, start, buf.Writes, tc.expected)
-			buf.Close()
-		})
-	}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		var writes []*datasyncpb.SensorData
+		select {
+		case <-ctx.Done():
+			t.Fatal("timed out waiting for writes")
+		case writes = <-buf.Writes:
+		}
+
+		test.That(t, len(writes), test.ShouldEqual, 1)
+		write := writes[0]
+
+		// Check metadata
+		test.That(t, write.Metadata.MimeType, test.ShouldEqual, datasyncpb.MimeType_MIME_TYPE_IMAGE_JPEG)
+		test.That(t, write.Metadata.TimeRequested.AsTime().After(start), test.ShouldBeTrue)
+		test.That(t, write.Metadata.TimeReceived.AsTime().After(start), test.ShouldBeTrue)
+
+		// Check annotations
+		bboxConf := 0.45
+		classConf := 0.85
+		test.That(t, write.Metadata.Annotations.Bboxes, test.ShouldHaveLength, 1)
+		test.That(t, write.Metadata.Annotations.Bboxes[0].Label, test.ShouldEqual, "cat")
+		test.That(t, *write.Metadata.Annotations.Bboxes[0].Confidence, test.ShouldEqual, bboxConf)
+		test.That(t, write.Metadata.Annotations.Classifications, test.ShouldHaveLength, 1)
+		test.That(t, write.Metadata.Annotations.Classifications[0].Label, test.ShouldEqual, "cat")
+		test.That(t, *write.Metadata.Annotations.Classifications[0].Confidence, test.ShouldEqual, classConf)
+
+		// Check binary data is valid JPEG with correct dimensions
+		binary := write.GetBinary()
+		test.That(t, binary, test.ShouldNotBeEmpty)
+		decodedImg, err := rimage.DecodeImage(ctx, binary, utils.MimeTypeJPEG)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, decodedImg.Bounds().Dx(), test.ShouldEqual, 32)
+		test.That(t, decodedImg.Bounds().Dy(), test.ShouldEqual, 32)
+
+		buf.Close()
+	})
 }
 
 func TestDoCommandCollector(t *testing.T) {
 	viamLogoJpeg, err := io.ReadAll(base64.NewDecoder(base64.StdEncoding, bytes.NewReader(viamLogoJpegB64)))
 	test.That(t, err, test.ShouldBeNil)
-	img := rimage.NewLazyEncodedImage(viamLogoJpeg, utils.MimeTypeJPEG)
+	img, err := rimage.DecodeImage(context.Background(), viamLogoJpeg, utils.MimeTypeJPEG)
+	test.That(t, err, test.ShouldBeNil)
 	datatu.TestDoCommandCollector(t, datatu.DoCommandTestConfig{
 		ComponentName:   serviceName,
 		CaptureInterval: captureInterval,

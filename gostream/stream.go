@@ -19,7 +19,6 @@ import (
 	"go.viam.com/rdk/gostream/codec"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/rimage"
-	utils2 "go.viam.com/rdk/utils"
 )
 
 const (
@@ -271,8 +270,8 @@ func (bs *basicStream) processInputFrames() {
 
 			var encodedFrame []byte
 
-			if frame, ok := framePair.Media.(*rimage.LazyEncodedImage); ok && frame.MIMEType() == utils2.MimeTypeH264 {
-				encodedFrame = frame.RawData() // nothing to do; already encoded
+			if frame, ok := framePair.Media.(rimage.H264); ok {
+				encodedFrame = frame.Bytes // nothing to do; already encoded
 			} else {
 				var bounds image.Rectangle
 				var boundsError any

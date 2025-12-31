@@ -298,9 +298,7 @@ func imageToProto(ctx context.Context, img image.Image, cameraName string) (*cam
 func encodeUnknownType(ctx context.Context, img image.Image, defaultMime string) ([]byte, string, error) {
 	var mimeType string
 
-	switch im := img.(type) {
-	case *rimage.LazyEncodedImage:
-		return im.RawData(), im.MIMEType(), nil
+	switch img.(type) {
 	case *image.Gray, *rimage.DepthMap:
 		mimeType = utils.MimeTypeRawDepth
 
