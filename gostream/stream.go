@@ -117,6 +117,9 @@ type basicStream struct {
 	shutdownCtxCancel       func()
 	activeBackgroundWorkers sync.WaitGroup
 	logger                  logging.Logger
+
+	// ttffStart is set when Start() is called, used to measure total time to first frame.
+	ttffStart time.Time
 }
 
 func (bs *basicStream) Name() string {
@@ -131,6 +134,8 @@ func (bs *basicStream) Start() {
 		return
 	}
 	bs.started = true
+	bs.ttffStart = time.Now()
+	bs.logger.Infow("[TTFF] Stream.Start() called", "stream", bs.name)
 	close(bs.streamingReadyCh)
 	// add 2 actviate background workers for the processInput and output frames routines
 	bs.activeBackgroundWorkers.Add(2)
@@ -191,6 +196,9 @@ func (bs *basicStream) processInputFrames() {
 	frameLimiterDur := time.Second / time.Duration(bs.config.TargetFrameRate)
 	defer close(bs.outputVideoChan)
 	var dx, dy int
+	var framesSentFromInput int
+	processStart := time.Now()
+	bs.logger.Infow("[TTFF] processInputFrames started", "frameLimiterDur", frameLimiterDur)
 	ticker := time.NewTicker(frameLimiterDur)
 	defer ticker.Stop()
 	for {
@@ -252,25 +260,39 @@ func (bs *basicStream) processInputFrames() {
 				newDx, newDy := bounds.Dx(), bounds.Dy()
 				if bs.videoEncoder == nil || dx != newDx || dy != newDy {
 					dx, dy = newDx, newDy
-					bs.logger.Infow("detected new image bounds", "width", dx, "height", dy)
+					bs.logger.Infow("[TTFF] detected new image bounds", "width", dx, "height", dy)
 
+					codecStart := time.Now()
 					if err := bs.initVideoCodec(dx, dy); err != nil {
 						bs.logger.Error(err)
 						initErr = true
 						return
 					}
+					bs.logger.Infow("[TTFF] codec initialized", "width", dx, "height", dy,
+						"duration", time.Since(codecStart))
 				}
 
 				// thread-safe because the size is static
+				encodeStart := time.Now()
 				var err error
 				encodedFrame, err = bs.videoEncoder.Encode(bs.shutdownCtx, framePair.Media)
 				if err != nil {
 					bs.logger.Error(err)
 					return
 				}
+				if framesSentFromInput < 3 {
+					bs.logger.Infow("[TTFF] frame encoded", "frame", framesSentFromInput+1,
+						"encodeDuration", time.Since(encodeStart))
+				}
 			}
 
 			if encodedFrame != nil {
+				framesSentFromInput++
+				if framesSentFromInput <= 3 {
+					bs.logger.Infow("[TTFF] frame sent to output channel",
+						"frame", framesSentFromInput,
+						"timeSinceProcessStart", time.Since(processStart))
+				}
 				select {
 				case <-bs.shutdownCtx.Done():
 					return
@@ -286,6 +308,7 @@ func (bs *basicStream) processInputFrames() {
 
 func (bs *basicStream) processOutputFrames() {
 	framesSent := 0
+	outputStart := time.Now()
 	for outputFrame := range bs.outputVideoChan {
 		select {
 		case <-bs.shutdownCtx.Done():
@@ -297,6 +320,17 @@ func (bs *basicStream) processOutputFrames() {
 			bs.logger.Errorw("error writing frame", "error", err)
 		}
 		framesSent++
+		if framesSent == 1 {
+			bs.logger.Warnw("[TTFF] *** FIRST FRAME WRITTEN TO WEBRTC TRACK ***",
+				"stream", bs.name,
+				"totalTTFF", time.Since(bs.ttffStart),
+				"writeDuration", time.Since(now))
+		} else if framesSent <= 3 {
+			bs.logger.Infow("[TTFF] frame written to WebRTC track",
+				"frame", framesSent,
+				"writeDuration", time.Since(now),
+				"timeSinceOutputStart", time.Since(outputStart))
+		}
 		if Debug {
 			bs.logger.Debugw("wrote sample", "frames_sent", framesSent, "write_time", time.Since(now))
 		}

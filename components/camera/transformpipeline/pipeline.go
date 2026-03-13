@@ -113,7 +113,7 @@ func videoSourceFromCamera(ctx context.Context, cam camera.Camera) (camera.Video
 	if streamCam, ok := cam.(camera.VideoSource); ok {
 		return streamCam, nil
 	}
-	vs, err := camerautils.VideoSourceFromCamera(ctx, cam)
+	vs, err := camerautils.VideoSourceFromCamera(ctx, cam, logging.NewLogger("transform-pipeline"))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrVideoSourceCreation, err)
 	}

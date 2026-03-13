@@ -323,7 +323,11 @@ func (server *Server) GetStreamOptions(
 	}
 	if err != nil || camProps.IntrinsicParams == nil || camProps.IntrinsicParams.Width == 0 || camProps.IntrinsicParams.Height == 0 {
 		server.logger.Debug("width and height not found in camera properties")
+		sampleStart := time.Now()
 		width, height, err = sampleFrameSize(ctx, cam, server.logger)
+		server.logger.Infow("[TTFF] sampleFrameSize completed",
+			"camera", req.Name, "width", width, "height", height,
+			"duration", time.Since(sampleStart), "err", err)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sample frame size: %w", err)
 		}
@@ -418,7 +422,7 @@ func (server *Server) resizeVideoSource(ctx context.Context, name string, width,
 	if !ok {
 		return fmt.Errorf("stream state not found with name %q", name)
 	}
-	vs, err := camerautils.VideoSourceFromCamera(ctx, cam)
+	vs, err := camerautils.VideoSourceFromCamera(ctx, cam, server.logger)
 	if err != nil {
 		return fmt.Errorf("failed to create video source from camera: %w", err)
 	}
@@ -450,7 +454,7 @@ func (server *Server) resetVideoSource(ctx context.Context, name string) error {
 		return fmt.Errorf("stream state not found with name %q", name)
 	}
 	server.logger.Debug("resetting video source")
-	vs, err := camerautils.VideoSourceFromCamera(ctx, cam)
+	vs, err := camerautils.VideoSourceFromCamera(ctx, cam, server.logger)
 	if err != nil {
 		return fmt.Errorf("failed to create video source from camera: %w", err)
 	}
@@ -641,7 +645,7 @@ func (server *Server) refreshVideoSources(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-		src, err := camerautils.VideoSourceFromCamera(ctx, cam)
+		src, err := camerautils.VideoSourceFromCamera(ctx, cam, server.logger)
 		if err != nil {
 			server.logger.Errorf("error creating video source from camera: %v", err)
 			continue

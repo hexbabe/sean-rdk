@@ -290,13 +290,20 @@ func (state *StreamState) tick() {
 		state.streamSource = streamSourceGoStream
 	case state.streamSource == streamSourceUnknown: // && state.activeClients > 0
 		// this is the first subscription, attempt passthrough
-		state.logger.Info("attempting to subscribe to rtp_passthrough")
+		passthroughStart := time.Now()
+		state.logger.Infow("[TTFF] attempting rtp_passthrough subscription")
 		err := state.streamH264Passthrough()
 		if err != nil {
-			state.logger.Warnw("tick: rtp_passthrough not possible, falling back to GoStream", "err", err)
+			state.logger.Warnw("[TTFF] rtp_passthrough failed, falling back to GoStream",
+				"err", err, "passthroughAttemptDuration", time.Since(passthroughStart))
 			// if passthrough failed, fall back to gostream based approach
+			gostreamStart := time.Now()
 			state.Stream.Start()
+			state.logger.Infow("[TTFF] GoStream started", "startDuration", time.Since(gostreamStart))
 			state.streamSource = streamSourceGoStream
+		} else {
+			state.logger.Infow("[TTFF] rtp_passthrough subscription succeeded",
+				"duration", time.Since(passthroughStart))
 		}
 	// If we are currently using passthrough, and the stream state changes to resized
 	// we need to stop the passthrough stream and restart it through gostream.

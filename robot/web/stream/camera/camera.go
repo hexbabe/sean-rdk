@@ -6,15 +6,26 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"sync/atomic"
+	"time"
 
 	"github.com/pion/mediadevices/pkg/prop"
 
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/gostream"
+	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/rimage"
 	"go.viam.com/rdk/robot"
 	rutils "go.viam.com/rdk/utils"
 )
+
+// ttffLogger is a package-level logger for TTFF profiling. Set via SetTTFFLogger.
+var ttffLogger logging.Logger = logging.NewLogger("ttff")
+
+// SetTTFFLogger sets the logger used for TTFF profiling output.
+func SetTTFFLogger(l logging.Logger) {
+	ttffLogger = l
+}
 
 // StreamableImageMIMETypes represents all mime types the stream server supports.
 // The order of the slice defines the priority of the mime types.
@@ -68,7 +79,10 @@ func Camera(robot robot.Robot, stream gostream.Stream) (camera.Camera, error) {
 // GetStreamableNamedImageFromCamera returns the first named image it finds from the camera that is supported for streaming.
 // It prioritizes images based on the order of StreamableImageMIMETypes.
 func GetStreamableNamedImageFromCamera(ctx context.Context, cam camera.Camera) (camera.NamedImage, error) {
+	imagesStart := time.Now()
 	namedImages, _, err := cam.Images(ctx, nil, nil)
+	ttffLogger.Infow("[TTFF] cam.Images (unfiltered, source detection)",
+		"camera", cam.Name(), "duration", time.Since(imagesStart), "imageCount", len(namedImages), "err", err)
 	if err != nil {
 		return camera.NamedImage{}, err
 	}
@@ -76,9 +90,13 @@ func GetStreamableNamedImageFromCamera(ctx context.Context, cam camera.Camera) (
 		return camera.NamedImage{}, fmt.Errorf("no images received for camera %q", cam.Name())
 	}
 
+	matchStart := time.Now()
 	for _, streamableMimeType := range StreamableImageMIMETypes {
 		for _, namedImage := range namedImages {
 			if namedImage.MimeType() == streamableMimeType {
+				ttffLogger.Infow("[TTFF] source mime match (direct)",
+					"camera", cam.Name(), "sourceName", namedImage.SourceName,
+					"mimeType", streamableMimeType, "matchDuration", time.Since(matchStart))
 				return namedImage, nil
 			}
 
@@ -87,11 +105,18 @@ func GetStreamableNamedImageFromCamera(ctx context.Context, cam camera.Camera) (
 				continue
 			}
 
+			decodeStart := time.Now()
 			_, format, err := image.DecodeConfig(bytes.NewReader(imgBytes))
+			ttffLogger.Infow("[TTFF] DecodeConfig fallback",
+				"camera", cam.Name(), "sourceName", namedImage.SourceName,
+				"format", format, "decodeDuration", time.Since(decodeStart), "err", err)
 			if err != nil {
 				continue
 			}
 			if rutils.FormatStringToMimeType(format) == streamableMimeType {
+				ttffLogger.Infow("[TTFF] source mime match (DecodeConfig fallback)",
+					"camera", cam.Name(), "sourceName", namedImage.SourceName,
+					"mimeType", streamableMimeType, "matchDuration", time.Since(matchStart))
 				return namedImage, nil
 			}
 		}
@@ -134,21 +159,33 @@ func getImageBySourceName(ctx context.Context, cam camera.Camera, sourceName str
 
 // VideoSourceFromCamera converts a camera resource into a gostream VideoSource.
 // This is useful for streaming video from a camera resource.
-func VideoSourceFromCamera(ctx context.Context, cam camera.Camera) (gostream.VideoSource, error) {
+func VideoSourceFromCamera(ctx context.Context, cam camera.Camera, logger logging.Logger) (gostream.VideoSource, error) {
 	// The reader callback uses a small state machine to determine which image to request from the camera.
 	// A `sourceName` is used to track the selected image source. On the first call, `sourceName` is nil,
 	// so the first available streamable image is chosen. On subsequent successful calls, the same `sourceName`
 	// is used. If any errors occur while getting an image, `sourceName` is reset to nil, and the selection
 	// process starts over on the next call. This allows the stream to recover if a source becomes unavailable.
 	var sourceName *string
+	var frameCount atomic.Int64
+	var readerStart time.Time
 	reader := gostream.VideoReaderFunc(func(ctx context.Context) (image.Image, func(), error) {
+		frameNum := frameCount.Add(1)
+		if frameNum == 1 {
+			readerStart = time.Now()
+			logger.Infow("[TTFF] VideoReader first call", "camera", cam.Name())
+		}
+		frameStart := time.Now()
 		var respNamedImage camera.NamedImage
 
 		if sourceName == nil {
+			sourceDetectStart := time.Now()
 			namedImage, err := GetStreamableNamedImageFromCamera(ctx, cam)
 			if err != nil {
 				return nil, func() {}, err
 			}
+			logger.Infow("[TTFF] source detection complete",
+				"camera", cam.Name(), "sourceName", namedImage.SourceName,
+				"duration", time.Since(sourceDetectStart))
 			respNamedImage = namedImage
 			sourceName = &namedImage.SourceName
 		} else {
@@ -160,6 +197,7 @@ func VideoSourceFromCamera(ctx context.Context, cam camera.Camera) (gostream.Vid
 			}
 		}
 
+		decodeStart := time.Now()
 		img, err := respNamedImage.Image(ctx)
 		if err != nil {
 			sourceName = nil
@@ -170,6 +208,15 @@ func VideoSourceFromCamera(ctx context.Context, cam camera.Camera) (gostream.Vid
 		if err != nil {
 			sourceName = nil
 			return nil, func() {}, err
+		}
+
+		if frameNum <= 3 {
+			logger.Infow("[TTFF] frame ready for encoder",
+				"camera", cam.Name(), "frame", frameNum,
+				"decodeDuration", time.Since(decodeStart),
+				"totalFrameDuration", time.Since(frameStart),
+				"timeSinceFirstRead", time.Since(readerStart),
+				"width", img.Bounds().Dx(), "height", img.Bounds().Dy())
 		}
 
 		return img, func() {}, nil

@@ -13,6 +13,7 @@ import (
 	"go.viam.com/rdk/components/camera"
 	"go.viam.com/rdk/data"
 	"go.viam.com/rdk/gostream"
+	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/rimage"
 	camerautils "go.viam.com/rdk/robot/web/stream/camera"
@@ -282,7 +283,7 @@ func TestVideoSourceFromCamera(t *testing.T) {
 			return []camera.NamedImage{namedImg}, resource.ResponseMetadata{}, nil
 		},
 	}
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 
 	stream, err := vs.Stream(context.Background())
@@ -312,7 +313,7 @@ func TestVideoSourceFromCameraFalsyVideoProps(t *testing.T) {
 	// See: https://viam.atlassian.net/browse/RSDK-12744
 	//
 	// Instead, it should return a VideoSource with empty video props.
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, vs, test.ShouldNotBeNil)
 
@@ -339,7 +340,7 @@ func TestVideoSourceFromCameraWithNonsenseMimeType(t *testing.T) {
 		},
 	}
 
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), camWithNonsenseMimeType)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), camWithNonsenseMimeType, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, vs, test.ShouldNotBeNil)
 
@@ -373,7 +374,7 @@ func TestVideoSourceFromCamera_SourceSelection(t *testing.T) {
 		},
 	}
 
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 
 	stream, err := vs.Stream(context.Background())
@@ -425,7 +426,7 @@ func TestVideoSourceFromCamera_Recovery(t *testing.T) {
 		},
 	}
 
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 
 	stream, err := vs.Stream(context.Background())
@@ -461,7 +462,7 @@ func TestVideoSourceFromCamera_NoImages(t *testing.T) {
 		},
 	}
 
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, vs, test.ShouldNotBeNil)
 
@@ -484,7 +485,7 @@ func TestVideoSourceFromCamera_ImagesError(t *testing.T) {
 		},
 	}
 
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, vs, test.ShouldNotBeNil)
 
@@ -521,7 +522,7 @@ func TestVideoSourceFromCamera_MultipleStreamableSources(t *testing.T) {
 		},
 	}
 
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 	stream, err := vs.Stream(context.Background())
 	test.That(t, err, test.ShouldBeNil)
@@ -551,7 +552,7 @@ func TestVideoSourceFromCamera_NoStreamableSources(t *testing.T) {
 		},
 	}
 
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 	stream, err := vs.Stream(context.Background())
 	test.That(t, err, test.ShouldBeNil)
@@ -590,7 +591,7 @@ func TestVideoSourceFromCamera_FilterNoImages(t *testing.T) {
 		},
 	}
 
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 	stream, err := vs.Stream(context.Background())
 	test.That(t, err, test.ShouldBeNil)
@@ -634,7 +635,7 @@ func TestVideoSourceFromCamera_FilterMultipleImages(t *testing.T) {
 		},
 	}
 
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 	stream, err := vs.Stream(context.Background())
 	test.That(t, err, test.ShouldBeNil)
@@ -683,7 +684,7 @@ func TestVideoSourceFromCamera_FilterMultipleImages_NoMatchingSource(t *testing.
 		},
 	}
 
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 	stream, err := vs.Stream(context.Background())
 	test.That(t, err, test.ShouldBeNil)
@@ -735,7 +736,7 @@ func TestVideoSourceFromCamera_LazyDecodeConfigError(t *testing.T) {
 		},
 	}
 
-	_, err = camerautils.VideoSourceFromCamera(context.Background(), cam)
+	_, err = camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 }
 
@@ -769,7 +770,7 @@ func TestVideoSourceFromCamera_InvalidImageFirst_ThenValidAlsoAvailable(t *testi
 		},
 	}
 
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 	stream, err := vs.Stream(context.Background())
 	test.That(t, err, test.ShouldBeNil)
@@ -811,7 +812,7 @@ func TestVideoSourceFromCamera_FilterMismatchedSourceName(t *testing.T) {
 		},
 	}
 
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 	stream, err := vs.Stream(context.Background())
 	test.That(t, err, test.ShouldBeNil)
@@ -849,7 +850,7 @@ func TestVideoSourceFromCamera_OddDimensionsCropped(t *testing.T) {
 		},
 	}
 
-	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam)
+	vs, err := camerautils.VideoSourceFromCamera(context.Background(), cam, logging.NewLogger("test"))
 	test.That(t, err, test.ShouldBeNil)
 
 	stream, err := vs.Stream(context.Background())
